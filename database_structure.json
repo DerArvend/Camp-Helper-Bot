@@ -1,0 +1,30 @@
+//this json describes how data is stored in MongoDB
+//it is not used by bot
+
+//collection "users"
+//each document represents user
+{
+	"name": "%name%",
+	"user_id": "id",
+	"room": "%room_number%",
+	"achievements": [
+		"achievement1",
+		"achievement2",
+		"achievementN"
+	]
+}
+
+//collection "schedule"
+//each document represents event
+{
+	"hour": "%event_hour%",
+	"minute": "%event_minute",
+	"name": "%event_name%"
+}
+
+//collection "info"
+//single document with info ablout administration phones
+{
+	"phones": "%phones_data%"
+}
+
