@@ -1,6 +1,7 @@
 PERMISSION_DENIED = "You are not permitted to perform this command"
 WELCOME = "Welcome!"
 ACHIEVEMENT_SET_INVALID = "Invalid set command. Must be:\n'/achievements add user_name:achievement_name'"
+ACHIEVEMENT_NODATA = "You have no achievements yet"
 ROOM_SET_INVALID = "Invalid set command. Must be:\n'/setroom room_number'"
 ROOM_SET_SUCCESS = "Your room set to"
 ROOM_GET_INVALID = "Invalid get room command. Must be:\n'/getroom name'"

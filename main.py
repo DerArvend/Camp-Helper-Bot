@@ -55,8 +55,12 @@ def handle_achivements(message):
     splitted_msg = message.text.split(maxsplit=2)
 
     if len(splitted_msg) == 1:
-        bot.send_message(message.from_user.id,
-                         utils.get_user_achievements(db.users, message.from_user))
+        achievements = utils.get_user_achievements(db.users, message.from_user)
+        if len(achievements) == 0:
+            bot.send_message(message.from_user.id, answers.ACHIEVEMENT_NODATA)
+            return
+
+        bot.send_message(message.from_user.id, achievements)
         return
 
     if len(splitted_msg) == 3 and splitted_msg[1] == "add":
