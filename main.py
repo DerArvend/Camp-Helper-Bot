@@ -6,7 +6,7 @@ import config
 import utils
 import answers
 
-bot = telebot.AsyncTeleBot(config.bot_token)
+bot = telebot.TeleBot(config.bot_token)
 polling = Thread(target=bot.polling, kwargs={"none_stop": True, "interval": 1})
 client = MongoClient(config.MONGO_HOST, config.MONGO_PORT)
 db = client[config.MONGO_DB]
@@ -153,7 +153,7 @@ def set_schedule(message):
 
     for event in text_schedule:
         if utils.is_valid_event(event):
-            splitted_event = event.split()
+            splitted_event = event.split(maxsplit=1)
             hours, minutes = splitted_event[0].split(":")
             event_name = splitted_event[1]
             db.schedule.insert({
@@ -167,8 +167,8 @@ def set_schedule(message):
 
 @bot.message_handler(commands=['getschedule'])
 def get_schedule(message):
-    bot.send_message(message.from_user.id,
-                     utils.get_schedule_text_from_collection(db.schedule))
+    schedule = utils.get_schedule_text_from_collection(db.schedule)
+    bot.send_message(message.chat.id, schedule)
 
 
 if __name__ == '__main__':
