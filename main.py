@@ -167,12 +167,44 @@ def set_schedule(message):
             })
 
     bot.send_message(message.from_user.id, answers.SCHEDULE_SET_SUCCESS)
+    notify_all_users("{}\n{}".format(answers.NEW_SCHEDULE, splitted[1]))
 
 
 @bot.message_handler(commands=['getschedule'])
 def get_schedule(message):
     schedule = utils.get_schedule_text_from_collection(db.schedule)
-    bot.send_message(message.chat.id, schedule)
+    bot.send_message(message.from_user.id, schedule)
+
+
+@bot.message_handler(commands=['users'])
+def get_users(message):
+    users_text = ''
+    for user in db.users.find():
+        users_text += user['name']
+        users_text += "\n"
+    bot.send_message(message.from_user.id, users_text)
+
+
+@bot.message_handler(commands=['admin'])
+def set_admin(message):
+    if not utils.is_user_admin(db.users, message.from_user):
+        bot.send_message(message.from_user.id, answers.PERMISSION_DENIED)
+        return
+
+    command_data = message.text.split(maxsplit=2)
+    if len(command_data) != 3 or (command_data[1] != 'set' and command_data[1] != 'unset'):
+        bot.send_message(message.from_user.id, answers.ADMIN_SET_FAIL)
+        return
+
+    operation_type = {'set': True, 'unset': False}[command_data[1]]
+
+    if utils.is_entries_in_collection(db.users, {'name': command_data[2]}):
+        db.users.update_one(
+            {'name': command_data[2]},
+            {'$set': {'is_admin': operation_type}}
+        )
+
+    bot.send_message(message.from_user.id, answers.ADMIN_SET_SUCCESS)
 
 
 if __name__ == '__main__':

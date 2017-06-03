@@ -1,6 +1,6 @@
 from pymongo.collection import Collection
 from pymongo import ASCENDING
-from telebot.types import User
+from telebot.types import User, Message
 
 
 def get_connected_name(user: User) -> str:
