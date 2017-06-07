@@ -3,7 +3,7 @@ from time import sleep
 from pymongo import MongoClient
 import telebot
 import config
-import utils
+from utils import *
 import answers
 
 bot = telebot.TeleBot(config.bot_token)
@@ -12,19 +12,13 @@ client = MongoClient(config.MONGO_HOST, config.MONGO_PORT)
 db = client[config.MONGO_DB]
 
 
-def notify_all_users(notification: str):
-    for user in db.users.find():
-        bot.send_message(user['user_id'], notification)
-        sleep(0.04)  # to avoid telegram bot API limitations
-
-
 @bot.message_handler(commands=['start'])
 def init_user(message):
-    if utils.is_entries_in_collection(db.users, {'user_id': message.from_user.id}):
+    if is_entries_in_collection(db.users, {'user_id': message.from_user.id}):
         return
 
-    name = utils.get_connected_name(message.from_user)
-    is_admin = not utils.is_entries_in_collection(db.users)
+    name = get_connected_name(message.from_user)
+    is_admin = not is_entries_in_collection(db.users)
 
     db.users.insert({
         'name': name,
@@ -39,15 +33,12 @@ def init_user(message):
 
 @bot.message_handler(commands=['alert'])
 def alert(message):
-    if not utils.is_user_admin(db.users, message.from_user):
-        bot.send_message(message.from_user.id, answers.PERMISSION_DENIED)
+    if not is_valid_command(db, message, admin_only=True, command_length=2):
         return
 
-    msg_splitted = message.text.split(maxsplit=1)
-    if len(msg_splitted) != 2:
-        return
+    alert_text = message.text.split(maxsplit=1)[1]
 
-    notify_all_users(msg_splitted[1])
+    notify_all_users(db.users, bot, alert_text)
 
 
 @bot.message_handler(commands=['achievements'])
@@ -55,7 +46,7 @@ def handle_achivements(message):
     splitted_msg = message.text.split(maxsplit=2)
 
     if len(splitted_msg) == 1:
-        achievements = utils.get_user_achievements(db.users, message.from_user)
+        achievements = get_user_achievements(db.users, message.from_user)
         if len(achievements) == 0:
             bot.send_message(message.from_user.id, answers.ACHIEVEMENT_NODATA)
             return
@@ -64,11 +55,11 @@ def handle_achivements(message):
         return
 
     if len(splitted_msg) == 3 and splitted_msg[1] == "add":
-        if not utils.is_user_admin(db.users, message.from_user):
+        if not is_user_admin(db.users, message.from_user):
             bot.send_message(message.from_user.id, answers.PERMISSION_DENIED)
             return
 
-        if not utils.is_valid_achievement_set(db.users, splitted_msg[2]):
+        if not is_valid_achievement_set(db.users, splitted_msg[2]):
             bot.send_message(message.from_user.id, answers.ACHIEVEMENT_SET_INVALID)
             return
 
@@ -80,56 +71,51 @@ def handle_achivements(message):
             {'name': name},
             {'$push': {'achievements': achievement}}
         )
-        notify_all_users("{} {} \"{}\"!".format(name, answers.NEW_ACHIEVEMENT_NOTIFICATION, achievement))
+        notify_all_users(db.users, bot, "{} {} \"{}\"!".format(name, answers.NEW_ACHIEVEMENT_NOTIFICATION, achievement))
 
 
 @bot.message_handler(commands=['setroom'])
 def setroom(message):
-    splitted = message.text.split(maxsplit=1)
-    if len(splitted) != 2:
-        bot.send_message(message.from_user.id, answers.ROOM_SET_INVALID)
+    if not is_valid_command(db, message, command_length=2):
         return
+    room = message.text.split(maxsplit=1)[1]
 
     db.users.update_one(
         {'user_id': message.from_user.id},
-        {'$set': {'room': splitted[1]}}
+        {'$set': {'room': room}}
     )
-    bot.send_message(message.from_user.id, "{} {}".format(answers.ROOM_SET_SUCCESS, splitted[1]))
+    bot.send_message(message.from_user.id, "{} {}".format(answers.ROOM_SET_SUCCESS, room))
 
 
 @bot.message_handler(commands=['getroom'])
 def getroom(message):
-    splitted = message.text.split(maxsplit=1)
-    if len(splitted) != 2:
-        bot.send_message(message.from_user.id, answers.ROOM_GET_INVALID)
+    if not is_valid_command(db, message, command_length=2):
         return
 
-    if not utils.is_entries_in_collection(db.users, {'name': splitted[1]}):
+    username = message.text.split(maxsplit=1)[1]
+
+    if not is_entries_in_collection(db.users, {'name': username}):
         bot.send_message(message.from_user.id, answers.ROOM_GET_USER_NOT_EXIST)
         return
 
-    bot.send_message(message.from_user.id, db.users.find_one({'name': splitted[1]})['room'])
+    bot.send_message(message.from_user.id, db.users.find_one({'name': username})['room'])
 
 
 @bot.message_handler(commands=['setinfo'])
 def set_info(message):
-    if not utils.is_user_admin(db.users, message.from_user):
-        bot.send_message(message.from_user.id, answers.PERMISSION_DENIED)
+    if not is_valid_command(db, message, admin_only=True, command_length=2):
         return
 
-    splitted = message.text.split(maxsplit=1)
-    if len(splitted) != 2:
-        bot.send_message(message.from_user.id, answers.INFO_SET_INVALID)
-        return
+    info = message.text.split(maxsplit=1)[1]
 
     if db.info.find().count() == 0:
-        db.info.insert_one({'info': splitted[1]})
+        db.info.insert_one({'info': info})
         bot.send_message(message.from_user.id, answers.INFO_SET_SUCCESS)
         return
 
     db.info.update_one(
         {},
-        {'$set': {'info': splitted[1]}}
+        {'$set': {'info': info}}
     )
 
     bot.send_message(message.from_user.id, answers.INFO_SET_SUCCESS)
@@ -142,21 +128,15 @@ def send_info(message):
 
 @bot.message_handler(commands=['setschedule'])
 def set_schedule(message):
-    if not utils.is_user_admin(db.users, message.from_user):
-        bot.send_message(message.from_user.id, answers.PERMISSION_DENIED)
+    if not is_valid_command(db, message, admin_only=True, command_length=2):
         return
 
-    splitted = message.text.split(maxsplit=1)
-
-    if len(splitted) != 2:
-        bot.send_message(message.from_user.id, answers.SCHEDULE_SET_INVALID)
-        return
-
-    text_schedule = splitted[1].split("\n")
+    text_schedule = message.text.split(maxsplit=1)[1]
+    splitted_text_schedule = text_schedule.split("\n")
     db.drop_collection('schedule')
 
-    for event in text_schedule:
-        if utils.is_valid_event(event):
+    for event in splitted_text_schedule:
+        if is_valid_event(event):
             splitted_event = event.split(maxsplit=1)
             hours, minutes = splitted_event[0].split(":")
             event_name = splitted_event[1]
@@ -167,12 +147,12 @@ def set_schedule(message):
             })
 
     bot.send_message(message.from_user.id, answers.SCHEDULE_SET_SUCCESS)
-    notify_all_users("{}\n{}".format(answers.NEW_SCHEDULE, splitted[1]))
+    notify_all_users(db.users, bot, "{}\n{}".format(answers.NEW_SCHEDULE, text_schedule))
 
 
 @bot.message_handler(commands=['getschedule'])
 def get_schedule(message):
-    schedule = utils.get_schedule_text_from_collection(db.schedule)
+    schedule = get_schedule_text_from_collection(db.schedule)
     bot.send_message(message.from_user.id, schedule)
 
 
@@ -187,22 +167,22 @@ def get_users(message):
 
 @bot.message_handler(commands=['admin'])
 def set_admin(message):
-    if not utils.is_user_admin(db.users, message.from_user):
-        bot.send_message(message.from_user.id, answers.PERMISSION_DENIED)
+    if not is_valid_command(db, message, admin_only=True, command_length=3):
         return
 
-    command_data = message.text.split(maxsplit=2)
-    if len(command_data) != 3 or (command_data[1] != 'set' and command_data[1] != 'unset'):
+    option, username = message.text.split(maxsplit=2)[1:]
+    if option != "set" and option != "unset":
         bot.send_message(message.from_user.id, answers.ADMIN_SET_FAIL)
-        return
 
-    operation_type = {'set': True, 'unset': False}[command_data[1]]
+    operation_type = {'set': True, 'unset': False}[option]
 
-    if utils.is_entries_in_collection(db.users, {'name': command_data[2]}):
-        db.users.update_one(
-            {'name': command_data[2]},
-            {'$set': {'is_admin': operation_type}}
-        )
+    if not is_entries_in_collection(db.users, {'name': username}):
+        bot.send_message(message.from_user.id, answers.USER_NOT_FOUND)
+
+    db.users.update_one(
+        {'name': username},
+        {'$set': {'is_admin': operation_type}}
+    )
 
     bot.send_message(message.from_user.id, answers.ADMIN_SET_SUCCESS)
 
